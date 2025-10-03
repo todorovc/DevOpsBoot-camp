@@ -1,0 +1,56 @@
+# Kubernetes Service Types: Internal vs External
+
+Kubernetes Services provide networking and load balancing for Pods. The key difference between internal and external services is **where they can be accessed from**.
+
+## Internal Services (ClusterIP)
+
+**ClusterIP** is the default service type and creates an internal-only endpoint:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  type: ClusterIP  # Internal only
+  selector:
+    app: backend
+  ports:
+    - port: 8080
+```
+
+- **Accessible only within the cluster** - other Pods can reach it using the service name (e.g., `backend-service:8080`)
+- Gets a virtual IP address from the cluster's internal IP range
+- Perfect for databases, internal APIs, and backend services that shouldn't be exposed externally
+- Provides service discovery via DNS
+
+## External Services
+
+There are multiple ways to expose services externally:
+
+**NodePort**: Opens a specific port on all cluster nodes (30000-32767 range):
+```yaml
+type: NodePort
+ports:
+  - port: 80
+    nodePort: 30080  # Accessible on any-node-ip:30080
+```
+
+**LoadBalancer**: Provisions a cloud load balancer (AWS ELB, GCP Load Balancer):
+```yaml
+type: LoadBalancer  # Gets external IP from cloud provider
+```
+
+**Ingress**: HTTP/HTTPS routing layer (most common for web applications):
+```yaml
+kind: Ingress  # Routes external traffic based on hostnames/paths
+```
+
+## When to Use Each
+
+- **ClusterIP**: Internal microservices, databases, caching layers
+- **NodePort**: Development, testing, or when you don't have a load balancer
+- **LoadBalancer**: Production services needing external access with automatic cloud integration
+- **Ingress**: Multiple web services with path/host-based routing, SSL termination
+
+The choice depends on whether your service needs to be reachable from outside the cluster and your infrastructure setup.

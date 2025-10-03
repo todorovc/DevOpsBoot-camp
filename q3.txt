@@ -1,0 +1,41 @@
+# Ansible Roles
+
+Ansible roles are a way to organize and package automation content into reusable, modular components. They provide a standardized directory structure for grouping related tasks, variables, files, templates, and handlers together.
+
+## Structure
+
+A role follows a predefined directory layout:
+
+```
+roles/
+  webserver/
+    tasks/         # Main list of tasks
+    handlers/      # Triggered by notify
+    files/         # Static files to copy
+    templates/     # Jinja2 templates
+    vars/          # Variables (high precedence)
+    defaults/      # Default variables (low precedence)
+    meta/          # Role dependencies and metadata
+```
+
+## Why Use Roles?
+
+**Reusability**: Write once, use across multiple playbooks and projects. A "nginx" role can be used anywhere you need nginx configured.
+
+**Organization**: Instead of one massive playbook, you break functionality into logical units (database role, application role, monitoring role).
+
+**Sharing**: Roles can be shared via Ansible Galaxy, allowing teams to use community-maintained roles.
+
+**Simplification**: Roles automatically know where to find their files and templates, reducing path complexity.
+
+## Basic Usage
+
+```yaml
+- hosts: webservers
+  roles:
+    - common
+    - nginx
+    - { role: mysql, mysql_port: 3307 }
+```
+
+Roles execute in order, running their tasks, applying templates, and triggering handlers as needed. They're the building blocks of well-structured Ansible automation, promoting the DRY (Don't Repeat Yourself) principle and making infrastructure code more maintainable

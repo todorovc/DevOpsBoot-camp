@@ -1,0 +1,21 @@
+# System Requirements
+# 
+# This project requires the following tools to be installed:
+
+# Required Tools:
+# - Terraform >= 1.0
+# - Ansible >= 2.9
+# - AWS CLI >= 2.0
+# - kubectl >= 1.28
+# - Docker >= 20.0
+# - Python >= 3.8
+
+# Python packages for Ansible
+ansible>=6.0.0
+kubernetes>=24.2.0
+boto3>=1.26.0
+botocore>=1.29.0
+
+# Optional: For local development
+# docker-compose>=2.0.0
+# helm>=3.0.0

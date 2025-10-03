@@ -1,0 +1,36 @@
+---
+# Variables specific to application servers
+
+# Java application settings
+java_home: "/usr/lib/jvm/java-11-openjdk-amd64"
+java_opts: "-Xmx512m -Xms256m -Dspring.profiles.active=production"
+
+# Maven settings
+maven_version: "3.8.*"
+maven_home: "/opt/maven"
+
+# Application deployment
+app_jar_name: "{{ app_name }}-{{ app_version }}.jar"
+app_config_file: "{{ app_home }}/application.properties"
+app_service_name: "{{ app_name }}"
+
+# Database connection (if needed)
+db_host: "localhost"
+db_port: 5432
+db_name: "{{ app_name }}"
+db_user: "{{ app_name }}"
+db_password: "secure_password_here"
+
+# Application server specific packages
+app_packages:
+  - "{{ java_version }}"
+  - maven
+  - postgresql-client
+
+# Service configuration
+service_enabled: true
+service_state: started
+
+# Health check settings
+health_check_url: "http://localhost:{{ app_port }}/health"
+health_check_timeout: 30

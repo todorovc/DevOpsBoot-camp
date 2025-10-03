@@ -1,0 +1,147 @@
+---
+# Default variables for app-deploy role
+
+# Application configuration
+application_name: "demo-k8s-app"
+application_version: "1.0.0"
+application_image: "demo-k8s-app:latest"
+application_replicas: 3
+app_namespace: "demo-app"
+environment: "development"
+
+# Feature flags
+enable_ingress: true
+
+# Kubernetes manifest definitions
+deployment_manifest:
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: "{{ application_name }}"
+    namespace: "{{ app_namespace }}"
+    labels:
+      app: "{{ application_name }}"
+      version: "{{ application_version }}"
+      environment: "{{ environment }}"
+  spec:
+    replicas: "{{ application_replicas | int }}"
+    selector:
+      matchLabels:
+        app: "{{ application_name }}"
+    template:
+      metadata:
+        labels:
+          app: "{{ application_name }}"
+          version: "{{ application_version }}"
+          environment: "{{ environment }}"
+      spec:
+        containers:
+        - name: "{{ application_name }}"
+          image: "{{ application_image }}"
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          env:
+          - name: APP_VERSION
+            value: "{{ application_version }}"
+          - name: ENVIRONMENT
+            value: "{{ environment }}"
+          - name: PORT
+            value: "8080"
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: PYTHON_VERSION
+            value: "3.11"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+              - ALL
+        securityContext:
+          fsGroup: 1000
+        restartPolicy: Always
+        terminationGracePeriodSeconds: 30
+
+service_manifest:
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: "{{ application_name }}-service"
+    namespace: "{{ app_namespace }}"
+    labels:
+      app: "{{ application_name }}"
+      service: "{{ application_name }}-service"
+  spec:
+    type: ClusterIP
+    ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+    selector:
+      app: "{{ application_name }}"
+
+ingress_manifest:
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    name: "{{ application_name }}-ingress"
+    namespace: "{{ app_namespace }}"
+    labels:
+      app: "{{ application_name }}"
+    annotations:
+      kubernetes.io/ingress.class: alb
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/healthcheck-path: /health
+      alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+      alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+      alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+      alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+  spec:
+    rules:
+    - http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: "{{ application_name }}-service"
+              port:
+                number: 80

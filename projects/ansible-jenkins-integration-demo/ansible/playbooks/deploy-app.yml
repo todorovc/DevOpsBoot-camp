@@ -1,0 +1,98 @@
+---
+# Playbook specifically for deploying the Java application
+# This will be called by Jenkins after building the application
+
+- name: Deploy Application to App Servers
+  hosts: appservers
+  become: yes
+  
+  vars:
+    app_artifact_path: "/tmp/jenkins-ansible/{{ app_jar_name }}"
+    backup_dir: "{{ app_home }}/backups"
+    
+  pre_tasks:
+    - name: Verify artifact exists
+      stat:
+        path: "{{ app_artifact_path }}"
+      register: app_artifact
+      failed_when: not app_artifact.stat.exists
+
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+
+  tasks:
+    - name: Stop application service
+      service:
+        name: "{{ app_service_name }}"
+        state: stopped
+      ignore_errors: yes
+
+    - name: Backup current application (if exists)
+      copy:
+        src: "{{ app_home }}/{{ app_jar_name }}"
+        dest: "{{ backup_dir }}/{{ app_jar_name }}.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+      when: app_artifact.stat.exists
+      ignore_errors: yes
+
+    - name: Deploy new application
+      copy:
+        src: "{{ app_artifact_path }}"
+        dest: "{{ app_home }}/{{ app_jar_name }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+        backup: yes
+
+    - name: Start application service
+      service:
+        name: "{{ app_service_name }}"
+        state: started
+        enabled: yes
+
+    - name: Wait for application to start
+      wait_for:
+        port: "{{ app_port }}"
+        host: "{{ ansible_host }}"
+        delay: 10
+        timeout: 120
+
+    - name: Verify application health
+      uri:
+        url: "{{ health_check_url }}"
+        method: GET
+        status_code: 200
+        timeout: "{{ health_check_timeout }}"
+      register: health_check
+      retries: 5
+      delay: 10
+
+    - name: Display deployment status
+      debug:
+        msg:
+          - "Application deployed successfully!"
+          - "Health check URL: {{ health_check_url }}"
+          - "Status: {{ health_check.status }}"
+          - "Application accessible at: http://{{ ansible_host }}:{{ app_port }}"
+
+  post_tasks:
+    - name: Clean up old backups (keep last 5)
+      shell: |
+        cd {{ backup_dir }}
+        ls -t {{ app_jar_name }}.* | tail -n +6 | xargs -r rm --
+      ignore_errors: yes
+
+    - name: Update application version info
+      lineinfile:
+        path: "{{ app_home }}/VERSION"
+        create: yes
+        line: "{{ app_version }} - Deployed on {{ ansible_date_time.iso8601 }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"

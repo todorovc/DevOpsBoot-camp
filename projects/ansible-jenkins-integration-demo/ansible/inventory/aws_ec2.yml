@@ -1,0 +1,20 @@
+---
+plugin: aws_ec2
+regions:
+  - us-east-1
+keyed_groups:
+  - prefix: tag
+    key: tags
+  - prefix: instance_type
+    key: instance_type
+  - prefix: arch
+    key: architecture
+compose:
+  ansible_host: public_ip_address
+filters:
+  - "tag:Environment": "demo"
+hostnames:
+  - tag:Name
+  - ip-address
+ansible_user: ubuntu
+ansible_ssh_private_key_file: ../keys/aws_rsa

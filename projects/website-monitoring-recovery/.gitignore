@@ -1,0 +1,168 @@
+# Website Monitoring and Recovery - Git Ignore
+
+# Environment variables (contains sensitive data)
+.env
+.env.local
+.env.production
+.env.staging
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs and monitoring data
+logs/
+*.log
+log/
+monitoring_data/
+results/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+.cache/
+
+# Database files (if using local SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration overrides (may contain sensitive data)
+config/local_config.yaml
+config/production_config.yaml
+config/staging_config.yaml
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Docker volumes and data
+docker-data/
+volumes/
+
+# SSH keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+ssh_keys/
+
+# Monitoring results and reports
+results/
+reports/
+monitoring_results_*.json
+cycle_results_*.json
+recovery_results_*.json
+deployment_*.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Node.js (if using any Node tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archives
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Local test files
+test_results/
+test_data/
+mock_data/
+
+# Deployment artifacts
+deployment/
+ansible_playbooks/secrets/
+terraform.tfstate*
+.terraform/
+
+# Custom ignore patterns for this project
+website-monitoring-recovery.tar.gz
+startup_script_*.sh
+/tmp/
+deployment_info_*.json
+
+# Linode-specific
+linode_instances.json
+server_credentials.txt
+
+# Email templates (if containing sensitive info)
+email_templates/production/
+
+# Performance test results
+load_test_results/
+benchmark_results/
+
+# Documentation build files
+docs/_build/
+docs/build/
+site/

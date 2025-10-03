@@ -1,0 +1,136 @@
+---
+- name: Deploy Demo Application to EKS Cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    cluster_name: "{{ cluster_name | default('k8s-demo-dev') }}"
+    aws_region: "{{ aws_region | default('us-west-2') }}"
+    namespace: "{{ app_namespace | default('demo-app') }}"
+    app_name: "demo-k8s-app"
+    app_version: "{{ app_version | default('1.0.0') }}"
+    docker_image: "{{ docker_image | default('demo-k8s-app:latest') }}"
+    replicas: "{{ app_replicas | default(3) }}"
+
+  tasks:
+    - name: Display deployment information
+      debug:
+        msg:
+          - "Deploying {{ app_name }} to EKS cluster: {{ cluster_name }}"
+          - "AWS Region: {{ aws_region }}"
+          - "Namespace: {{ namespace }}"
+          - "Image: {{ docker_image }}"
+          - "Replicas: {{ replicas }}"
+
+    - name: Check if kubectl is installed
+      command: kubectl version --client
+      register: kubectl_version
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if kubectl is not installed
+      fail:
+        msg: "kubectl is not installed or not in PATH"
+      when: kubectl_version.rc != 0
+
+    - name: Update kubeconfig for EKS cluster
+      command: >
+        aws eks update-kubeconfig 
+        --region {{ aws_region }} 
+        --name {{ cluster_name }}
+      register: kubeconfig_update
+      changed_when: "'Added new context' in kubeconfig_update.stderr"
+
+    - name: Test cluster connectivity
+      command: kubectl cluster-info
+      register: cluster_info
+      changed_when: false
+
+    - name: Display cluster information
+      debug:
+        msg: "{{ cluster_info.stdout_lines }}"
+
+    - name: Deploy application using Ansible role
+      include_role:
+        name: app-deploy
+      vars:
+        app_namespace: "{{ namespace }}"
+        application_name: "{{ app_name }}"
+        application_version: "{{ app_version }}"
+        application_image: "{{ docker_image }}"
+        application_replicas: "{{ replicas }}"
+
+    - name: Wait for deployment to be ready
+      command: >
+        kubectl wait --for=condition=available 
+        --timeout=300s 
+        deployment/{{ app_name }} 
+        -n {{ namespace }}
+      register: deployment_ready
+
+    - name: Get deployment status
+      command: kubectl get deployments -n {{ namespace }}
+      register: deployment_status
+      changed_when: false
+
+    - name: Display deployment status
+      debug:
+        msg: "{{ deployment_status.stdout_lines }}"
+
+    - name: Get pods status
+      command: kubectl get pods -n {{ namespace }}
+      register: pods_status
+      changed_when: false
+
+    - name: Display pods status
+      debug:
+        msg: "{{ pods_status.stdout_lines }}"
+
+    - name: Get service information
+      command: kubectl get svc -n {{ namespace }}
+      register: service_info
+      changed_when: false
+
+    - name: Display service information
+      debug:
+        msg: "{{ service_info.stdout_lines }}"
+
+    - name: Check if AWS Load Balancer Controller is installed
+      command: >
+        kubectl get deployment aws-load-balancer-controller 
+        -n kube-system
+      register: alb_controller_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display ingress information if ALB controller exists
+      block:
+        - name: Get ingress information
+          command: kubectl get ingress -n {{ namespace }}
+          register: ingress_info
+          changed_when: false
+
+        - name: Display ingress information
+          debug:
+            msg: "{{ ingress_info.stdout_lines }}"
+
+        - name: Get ingress details
+          command: kubectl describe ingress -n {{ namespace }}
+          register: ingress_details
+          changed_when: false
+
+        - name: Display ingress details
+          debug:
+            msg: "{{ ingress_details.stdout_lines }}"
+      when: alb_controller_check.rc == 0
+
+    - name: Display access instructions
+      debug:
+        msg:
+          - "Application deployed successfully!"
+          - "To access the application:"
+          - "1. Port-forward: kubectl port-forward svc/{{ app_name }}-service 8080:80 -n {{ namespace }}"
+          - "2. Then visit: http://localhost:8080"
+          - "3. Health check: http://localhost:8080/health"
+          - "4. API info: http://localhost:8080/api/info"
+          - "Note: If ingress is configured and ALB controller is installed, external access will be available via ALB"

@@ -1,0 +1,238 @@
+---
+# Main playbook for configuring AWS EC2 instances
+# This playbook will be executed by Jenkins on the Ansible Control Node
+
+- name: Configure all managed nodes with common settings
+  hosts: managed_nodes
+  become: yes
+  gather_facts: yes
+  
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 600
+      tags: update
+
+    - name: Wait for system to be ready
+      wait_for_connection:
+        connect_timeout: 20
+        sleep: 5
+        delay: 5
+        timeout: 300
+
+  tasks:
+    - name: Install base packages
+      apt:
+        name: "{{ base_packages }}"
+        state: present
+      tags: packages
+
+    - name: Set timezone
+      timezone:
+        name: "{{ timezone }}"
+      tags: system
+
+    - name: Create application user
+      user:
+        name: "{{ app_user }}"
+        shell: /bin/bash
+        home: "/home/{{ app_user }}"
+        create_home: yes
+        groups: sudo
+        append: yes
+      tags: users
+
+    - name: Create application directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      loop:
+        - "{{ app_home }}"
+        - "{{ log_dir }}"
+      tags: directories
+
+    - name: Configure SSH security
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+        backup: yes
+      loop:
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+      notify: restart ssh
+      when: disable_root_login
+      tags: security
+
+    - name: Configure UFW firewall
+      ufw:
+        rule: allow
+        port: "{{ item.split('/')[0] }}"
+        proto: "{{ item.split('/')[1] }}"
+      loop: "{{ firewall_allowed_ports }}"
+      tags: firewall
+
+    - name: Enable UFW firewall
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+      tags: firewall
+
+  handlers:
+    - name: restart ssh
+      service:
+        name: ssh
+        state: restarted
+
+- name: Configure Web Servers
+  hosts: webservers
+  become: yes
+  
+  tasks:
+    - name: Install web server packages
+      apt:
+        name: "{{ web_packages }}"
+        state: present
+      tags: web
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: restart nginx
+      tags: web
+
+    - name: Create Nginx site configuration
+      template:
+        src: nginx-site.conf.j2
+        dest: "/etc/nginx/sites-available/{{ app_name }}"
+        backup: yes
+      notify: restart nginx
+      tags: web
+
+    - name: Enable Nginx site
+      file:
+        src: "/etc/nginx/sites-available/{{ app_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ app_name }}"
+        state: link
+      notify: restart nginx
+      tags: web
+
+    - name: Start and enable Nginx
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+      tags: web
+
+  handlers:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
+
+- name: Configure Application Servers
+  hosts: appservers
+  become: yes
+  
+  tasks:
+    - name: Install Java and build tools
+      apt:
+        name: "{{ app_packages }}"
+        state: present
+      tags: app
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+      tags: docker
+
+    - name: Start and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      tags: docker
+
+    - name: Add users to docker group
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop: "{{ docker_users }}"
+      tags: docker
+
+    - name: Create application configuration
+      template:
+        src: application.properties.j2
+        dest: "{{ app_config_file }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+      tags: app
+
+    - name: Create systemd service file for application
+      template:
+        src: app-service.j2
+        dest: "/etc/systemd/system/{{ app_service_name }}.service"
+        mode: '0644'
+      notify: 
+        - reload systemd
+        - restart app service
+      tags: app
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart app service
+      service:
+        name: "{{ app_service_name }}"
+        state: restarted
+
+- name: Verify deployment
+  hosts: managed_nodes
+  become: yes
+  
+  tasks:
+    - name: Check if services are running
+      service_facts:
+      tags: verify
+
+    - name: Display service status
+      debug:
+        msg: "Service {{ item }} is {{ ansible_facts.services[item + '.service'].state }}"
+      loop:
+        - nginx
+        - docker
+      when: 
+        - ansible_facts.services[item + '.service'] is defined
+        - inventory_hostname in groups['webservers'] and item == 'nginx'
+        - inventory_hostname in groups['appservers'] and item == 'docker'
+      tags: verify
+
+    - name: Test web connectivity (from web servers)
+      uri:
+        url: "http://localhost:{{ web_port }}"
+        method: GET
+        status_code: [200, 502, 503]
+      when: inventory_hostname in groups['webservers']
+      tags: verify
+      ignore_errors: yes
+
+    - name: Show deployment summary
+      debug:
+        msg: 
+          - "Deployment completed successfully!"
+          - "Web Server: {{ ansible_host }}:{{ web_port }}"
+          - "App Server: {{ ansible_host }}:{{ app_port }}"
+      tags: verify

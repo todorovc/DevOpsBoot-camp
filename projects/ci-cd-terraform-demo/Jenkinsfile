@@ -1,0 +1,221 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_HUB_REGISTRY = 'docker.io'
+        DOCKER_HUB_REPO = 'your-dockerhub-username/ci-cd-demo'
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        AWS_CREDENTIALS_ID = 'aws-credentials'
+        SSH_KEY_CREDENTIALS_ID = 'ec2-ssh-key'
+        TF_VAR_public_key = credentials('ec2-public-key')
+        DOCKER_IMAGE_TAG = "${BUILD_NUMBER}"
+        AWS_DEFAULT_REGION = 'us-west-2'
+    }
+    
+    tools {
+        maven 'maven-3.8'
+        dockerTool 'docker-latest'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+        
+        stage('Build Maven Application') {
+            steps {
+                dir('java-app') {
+                    sh 'mvn clean compile test package'
+                }
+            }
+            post {
+                always {
+                    dir('java-app') {
+                        publishTestResults testResultsPattern: 'target/surefire-reports/*.xml'
+                        archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                    }
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                dir('java-app') {
+                    script {
+                        def dockerImage = docker.build("${DOCKER_HUB_REPO}:${DOCKER_IMAGE_TAG}")
+                        docker.build("${DOCKER_HUB_REPO}:latest")
+                    }
+                }
+            }
+        }
+        
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry("https://${DOCKER_HUB_REGISTRY}", "${DOCKER_CREDENTIALS_ID}") {
+                        docker.image("${DOCKER_HUB_REPO}:${DOCKER_IMAGE_TAG}").push()
+                        docker.image("${DOCKER_HUB_REPO}:latest").push()
+                    }
+                }
+            }
+        }
+        
+        stage('Provision Infrastructure') {
+            steps {
+                dir('terraform') {
+                    withCredentials([
+                        aws(credentialsId: "${AWS_CREDENTIALS_ID}", accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        sh '''
+                            # Initialize Terraform
+                            terraform init
+                            
+                            # Plan infrastructure changes
+                            terraform plan -var="docker_image=${DOCKER_HUB_REPO}:${DOCKER_IMAGE_TAG}" -out=tfplan
+                            
+                            # Apply infrastructure changes
+                            terraform apply -auto-approve tfplan
+                            
+                            # Save outputs for later stages
+                            terraform output -json > terraform-outputs.json
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Wait for Instance Ready') {
+            steps {
+                script {
+                    dir('terraform') {
+                        def outputs = readJSON file: 'terraform-outputs.json'
+                        def instanceIp = outputs.instance_public_ip.value
+                        
+                        echo "Waiting for instance ${instanceIp} to be ready..."
+                        
+                        timeout(time: 10, unit: 'MINUTES') {
+                            waitUntil {
+                                script {
+                                    def result = sh(
+                                        script: "nc -z -w5 ${instanceIp} 22",
+                                        returnStatus: true
+                                    )
+                                    return result == 0
+                                }
+                            }
+                        }
+                        
+                        // Additional wait for user data script to complete
+                        sleep(time: 120, unit: 'SECONDS')
+                        echo "Instance is ready for deployment"
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy Application') {
+            steps {
+                script {
+                    dir('terraform') {
+                        def outputs = readJSON file: 'terraform-outputs.json'
+                        def instanceIp = outputs.instance_public_ip.value
+                        
+                        withCredentials([sshUserPrivateKey(credentialsId: "${SSH_KEY_CREDENTIALS_ID}", keyFileVariable: 'SSH_KEY')]) {
+                            sh """
+                                # Copy deployment files
+                                scp -i \${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \\
+                                    ../docker-compose/docker-compose.yml ../docker-compose/nginx.conf \\
+                                    ec2-user@${instanceIp}:/home/ec2-user/app/
+                                
+                                # Deploy the application
+                                ssh -i \${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \\
+                                    ec2-user@${instanceIp} \\
+                                    "cd /home/ec2-user/app && ./deploy.sh ${DOCKER_HUB_REPO}:${DOCKER_IMAGE_TAG}"
+                            """
+                        }
+                        
+                        echo "Application deployed successfully!"
+                        echo "Application URL: http://${instanceIp}:8080"
+                        echo "Nginx URL: http://${instanceIp}"
+                    }
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                script {
+                    dir('terraform') {
+                        def outputs = readJSON file: 'terraform-outputs.json'
+                        def instanceIp = outputs.instance_public_ip.value
+                        
+                        timeout(time: 5, unit: 'MINUTES') {
+                            waitUntil {
+                                script {
+                                    def result = sh(
+                                        script: "curl -f http://${instanceIp}:8080/health",
+                                        returnStatus: true
+                                    )
+                                    return result == 0
+                                }
+                            }
+                        }
+                        
+                        echo "Health check passed! Application is running."
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Pipeline execution completed'
+            
+            // Clean up local Docker images
+            sh '''
+                docker image prune -f
+                docker system prune -f
+            '''
+        }
+        
+        success {
+            script {
+                if (fileExists('terraform/terraform-outputs.json')) {
+                    def outputs = readJSON file: 'terraform/terraform-outputs.json'
+                    def instanceIp = outputs.instance_public_ip.value
+                    
+                    echo "🎉 Deployment successful!"
+                    echo "📱 Application URL: http://${instanceIp}:8080"
+                    echo "🌐 Nginx URL: http://${instanceIp}"
+                    echo "🐳 Docker Image: ${DOCKER_HUB_REPO}:${DOCKER_IMAGE_TAG}"
+                }
+            }
+        }
+        
+        failure {
+            echo '❌ Pipeline failed. Check logs for details.'
+            
+            // Optionally, you can add cleanup logic here
+            script {
+                if (params.CLEANUP_ON_FAILURE == 'true') {
+                    dir('terraform') {
+                        withCredentials([
+                            aws(credentialsId: "${AWS_CREDENTIALS_ID}", accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')
+                        ]) {
+                            sh 'terraform destroy -auto-approve || true'
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

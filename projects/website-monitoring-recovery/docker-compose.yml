@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  website-monitor:
+    build: .
+    container_name: website-monitor
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # For Docker container management
+    networks:
+      - monitoring-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "python", "scripts/monitor.py", "--health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - monitoring-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Optional: Web dashboard for monitoring status
+  dashboard:
+    build: 
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: monitoring-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_ENV=production
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs:ro
+    networks:
+      - monitoring-network
+    depends_on:
+      - redis
+    profiles:
+      - dashboard  # Use `docker-compose --profile dashboard up` to start with dashboard
+
+networks:
+  monitoring-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

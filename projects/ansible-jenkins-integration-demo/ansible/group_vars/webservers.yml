@@ -1,0 +1,23 @@
+---
+# Variables specific to web servers
+
+# Nginx configuration
+nginx_sites:
+  - name: "{{ app_name }}"
+    port: "{{ web_port }}"
+    proxy_pass: "http://{{ hostvars[groups['appservers'][0]]['ansible_host'] }}:{{ app_port }}"
+    server_name: "_"
+
+# Web server specific packages
+web_packages:
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+
+# Load balancer configuration (if multiple app servers)
+upstream_servers: "{{ groups['appservers'] | map('extract', hostvars, 'ansible_host') | list }}"
+
+# SSL/TLS settings
+ssl_enabled: false
+ssl_certificate_path: "/etc/ssl/certs/{{ app_name }}.crt"
+ssl_certificate_key_path: "/etc/ssl/private/{{ app_name }}.key"

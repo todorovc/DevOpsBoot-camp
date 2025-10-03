@@ -1,0 +1,7 @@
+Flask==2.3.3
+Flask-CORS==4.0.0
+redis==4.6.0
+psycopg2-binary==2.9.7
+prometheus-client==0.17.1
+gunicorn==21.2.0
+Werkzeug==2.3.7

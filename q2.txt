@@ -1,0 +1,40 @@
+# Semantic Versioning (SemVer)
+
+Semantic versioning is a widely-adopted versioning scheme that uses a three-part number format to communicate the nature of changes in software releases:
+
+## The Format: MAJOR.MINOR.PATCH
+
+- **MAJOR** (1.0.0): Increment when you make incompatible API changes or breaking changes
+- **MINOR** (0.1.0): Increment when you add functionality in a backward-compatible manner
+- **PATCH** (0.0.1): Increment when you make backward-compatible bug fixes
+
+**Example progression:**
+- `1.0.0` → `1.0.1` (bug fix)
+- `1.0.1` → `1.1.0` (new feature, backward-compatible)
+- `1.1.0` → `2.0.0` (breaking change)
+
+## Additional Elements
+
+- **Pre-release versions**: `1.0.0-alpha`, `1.0.0-beta.1`, `1.0.0-rc.2`
+- **Build metadata**: `1.0.0+20130313144700`
+
+## Practical Application Versioning
+
+Different types of applications follow different versioning strategies:
+
+**Libraries/APIs**: Strictly follow SemVer because consumers depend on compatibility guarantees.
+
+**Web applications**: Often use simplified schemes since users don't "install" specific versions. You might see marketing versions (2024.9 for September 2024) or simple incrementing (v2, v3).
+
+**Mobile/Desktop apps**: Typically use SemVer or marketing versions, sometimes both (iOS 17.4.1 internally, but marketed as just "iOS 17").
+
+**Internal tools**: May use date-based versioning (2025.09.30) or CI build numbers.
+
+## Best Practices
+
+- Start at `0.1.0` for initial development, use `1.0.0` for your first stable public release
+- Always increment only one number at a time, resetting the smaller ones (1.2.3 → 2.0.0, not 2.2.4)
+- Be conservative with major version bumps for established projects
+- Document breaking changes clearly in release notes
+- Use pre-release tags for beta testing
+

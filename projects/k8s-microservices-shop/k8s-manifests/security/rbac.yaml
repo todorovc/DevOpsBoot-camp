@@ -1,0 +1,185 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: online-shop
+  name: microservice-role
+  labels:
+    app.kubernetes.io/name: online-shop
+    app.kubernetes.io/component: rbac
+rules:
+# Allow reading ConfigMaps and Secrets
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+# Allow reading Services for service discovery
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list"]
+# Allow reading own Pod information
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+  resourceNames: [] # Restrict to own pod if needed
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: frontend-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: frontend-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: microservice-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: user-service-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: user-service-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: microservice-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: product-service-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: product-service
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: product-service-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: microservice-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: order-service-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: order-service-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: microservice-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: payment-service-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: payment-service-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: microservice-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Database Role with additional permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: online-shop
+  name: database-role
+  labels:
+    app.kubernetes.io/name: online-shop
+    app.kubernetes.io/component: rbac
+rules:
+# Allow reading ConfigMaps and Secrets
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+# Allow reading Services
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list"]
+# Allow reading own Pod information
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+# Allow reading PersistentVolumeClaims
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: redis-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: redis-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: database-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgres-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: postgres-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: database-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mongodb-rolebinding
+  namespace: online-shop
+  labels:
+    app.kubernetes.io/name: mongodb
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: mongodb-sa
+  namespace: online-shop
+roleRef:
+  kind: Role
+  name: database-role
+  apiGroup: rbac.authorization.k8s.io

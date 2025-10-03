@@ -1,0 +1,41 @@
+[Unit]
+Description={{ app_name | title }} Application Service
+After=network.target
+After=systemd-user-sessions.service
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+Group={{ app_user }}
+WorkingDirectory={{ app_home }}
+ExecStart=/usr/bin/java {{ java_opts }} -jar {{ app_home }}/{{ app_jar_name }}
+ExecStop=/bin/kill -15 $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+# Environment variables
+Environment=JAVA_HOME={{ java_home }}
+Environment=SPRING_CONFIG_LOCATION={{ app_config_file }}
+Environment=LOG_PATH={{ log_dir }}
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ app_home }} {{ log_dir }}
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ app_name }}
+
+[Install]
+WantedBy=multi-user.target

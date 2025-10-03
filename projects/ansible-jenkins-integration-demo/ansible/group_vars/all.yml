@@ -1,0 +1,48 @@
+---
+# Common variables for all managed nodes
+
+# Package versions
+java_version: "openjdk-11-jdk"
+docker_version: "20.10.*"
+nginx_version: "1.18.*"
+
+# Application settings
+app_name: "demo-app"
+app_version: "1.0.0"
+app_port: 8080
+web_port: 80
+
+# User and directories
+app_user: "appuser"
+app_home: "/opt/{{ app_name }}"
+log_dir: "/var/log/{{ app_name }}"
+
+# System settings
+timezone: "UTC"
+locale: "en_US.UTF-8"
+
+# Security settings
+disable_root_login: true
+allow_password_authentication: false
+
+# Firewall ports to open
+firewall_allowed_ports:
+  - "22/tcp"    # SSH
+  - "80/tcp"    # HTTP
+  - "8080/tcp"  # Application
+
+# Package lists
+base_packages:
+  - curl
+  - wget
+  - unzip
+  - vim
+  - htop
+  - git
+  - python3
+  - python3-pip
+
+# Docker settings
+docker_users:
+  - "{{ app_user }}"
+  - ubuntu

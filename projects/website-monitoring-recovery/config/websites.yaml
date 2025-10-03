@@ -1,0 +1,151 @@
+# Websites to Monitor Configuration
+# Add your websites here with their monitoring settings
+
+websites:
+  # Example 1: Basic HTTP monitoring
+  - url: https://httpbin.org/status/200
+    description: "HTTPBin Test Service"
+    expected_status: [200]
+    expected_content: null
+    ports: [80, 443]
+    
+  # Example 2: Website with content verification
+  - url: https://example.com
+    description: "Example Domain"
+    expected_status: [200, 301, 302]
+    expected_content: "Example Domain"
+    check_ssl: true
+    
+  # Example 3: Google homepage monitoring
+  - url: https://www.google.com
+    description: "Google Search"
+    expected_status: [200]
+    timeout_override: 15  # Custom timeout for this site
+    
+  # Example 4: API endpoint monitoring
+  - url: https://api.github.com
+    description: "GitHub API"
+    expected_status: [200]
+    expected_content: '"current_user_url"'
+    headers:
+      User-Agent: "WebsiteMonitor/1.0"
+      Accept: "application/vnd.github.v3+json"
+    
+  # Example 5: Custom port monitoring
+  - url: https://www.cloudflare.com
+    description: "Cloudflare Website"
+    expected_status: [200]
+    ports: [80, 443, 8080]
+    check_ssl: true
+    
+  # Example 6: Local development server (uncomment to use)
+  # - url: http://localhost:3000
+  #   description: "Local Development Server"
+  #   expected_status: [200]
+  #   timeout_override: 5
+  
+  # Example 7: E-commerce site monitoring
+  - url: https://www.shopify.com
+    description: "Shopify Homepage"
+    expected_status: [200]
+    expected_content: "Shopify"
+    max_response_time: 3.0  # Alert if response time > 3 seconds
+    
+  # Example 8: Blog or CMS monitoring
+  - url: https://wordpress.com
+    description: "WordPress.com"
+    expected_status: [200]
+    check_ssl: true
+    ports: [443]
+    
+  # Example 9: CDN monitoring
+  - url: https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js
+    description: "jsDelivr CDN"
+    expected_status: [200]
+    expected_content: "jQuery"
+    
+  # Example 10: Status page monitoring
+  - url: https://status.github.com
+    description: "GitHub Status Page"
+    expected_status: [200]
+    expected_content: "GitHub Status"
+
+# Global settings for all websites (can be overridden per site)
+global_settings:
+  timeout: 10                    # Default timeout in seconds
+  follow_redirects: true         # Follow HTTP redirects
+  verify_ssl: true              # Verify SSL certificates
+  user_agent: "WebsiteMonitor/1.0"
+  max_response_time: 5.0        # Default response time threshold
+  check_interval: 300           # Default check interval (5 minutes)
+  
+# Recovery actions specific to certain sites
+recovery_mappings:
+  # Map websites to specific recovery actions
+  "https://example.com":
+    actions:
+      - type: restart_nginx
+      - type: restart_container
+        target: web-server
+  
+  "http://localhost:3000":
+    actions:
+      - type: restart_process
+        target: node
+      - type: custom_script
+        target: "pm2 restart all"
+
+# Notification settings for specific sites
+notification_settings:
+  # Send different notifications for critical vs non-critical sites
+  critical_sites:
+    - "https://example.com"
+    - "https://api.github.com"
+  
+  # These sites will trigger immediate notifications
+  high_priority:
+    - "https://www.google.com"
+    - "https://status.github.com"
+  
+  # These sites have relaxed notification rules
+  low_priority:
+    - "https://httpbin.org/status/200"
+    - "https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"
+
+# Maintenance windows (times when monitoring is disabled)
+maintenance_windows:
+  # Weekly maintenance window
+  - name: "Weekly Maintenance"
+    day: "Sunday"
+    start_time: "02:00"
+    end_time: "04:00"
+    timezone: "UTC"
+    affected_sites:
+      - "https://example.com"
+  
+  # Monthly maintenance
+  - name: "Monthly Server Maintenance"
+    day: "first_sunday"  # First Sunday of each month
+    start_time: "01:00"
+    end_time: "03:00"
+    timezone: "UTC"
+    affected_sites: []  # Empty means all sites
+
+# Advanced monitoring features
+advanced_features:
+  # Performance monitoring
+  collect_metrics: true
+  metrics_retention_days: 30
+  
+  # SSL certificate monitoring
+  ssl_expiry_warning_days: 30  # Warn when SSL expires in 30 days
+  
+  # Response time percentiles to track
+  response_time_percentiles: [50, 90, 95, 99]
+  
+  # Custom headers for requests
+  default_headers:
+    User-Agent: "WebsiteMonitor/1.0 (+https://github.com/your-repo)"
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    Accept-Language: "en-US,en;q=0.5"
+    Cache-Control: "no-cache"

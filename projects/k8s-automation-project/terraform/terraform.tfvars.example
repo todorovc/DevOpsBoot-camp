@@ -1,0 +1,23 @@
+# Terraform Variables Example
+# Copy this file to terraform.tfvars and customize the values
+
+# AWS Configuration
+aws_region = "us-west-2"
+
+# Project Configuration
+project_name = "k8s-demo"
+environment  = "dev"
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# EKS Configuration
+cluster_version      = "1.28"
+node_instance_types  = ["t3.medium"]
+node_capacity_type   = "ON_DEMAND"
+desired_capacity     = 2
+min_capacity         = 1
+max_capacity         = 4
+
+# Optional: Uncomment to enable SSH access to worker nodes
+# key_pair_name = "your-ec2-key-pair-name"

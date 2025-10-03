@@ -1,0 +1,306 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Ansible Control Node connection details
+        ANSIBLE_HOST = credentials('ansible-control-host')
+        ANSIBLE_USER = 'ubuntu'
+        ANSIBLE_SSH_KEY = credentials('ansible-control-ssh-key')
+        
+        // AWS EC2 SSH Keys for managed nodes
+        AWS_SSH_KEY = credentials('aws-ec2-ssh-key')
+        
+        // Application details
+        APP_NAME = 'demo-app'
+        APP_VERSION = "${BUILD_NUMBER}"
+        
+        // Paths
+        ANSIBLE_WORKDIR = '/opt/ansible'
+        TEMP_DIR = '/tmp/jenkins-ansible'
+    }
+    
+    parameters {
+        choice(
+            name: 'DEPLOY_ENVIRONMENT',
+            choices: ['infrastructure', 'application', 'full-deployment'],
+            description: 'Select deployment type'
+        )
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: 'Skip running tests'
+        )
+        string(
+            name: 'PLAYBOOK_TAGS',
+            defaultValue: '',
+            description: 'Ansible playbook tags to run (comma-separated)'
+        )
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code...'
+                checkout scm
+                
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+        
+        stage('Build Application') {
+            when {
+                anyOf {
+                    params.DEPLOY_ENVIRONMENT == 'application'
+                    params.DEPLOY_ENVIRONMENT == 'full-deployment'
+                }
+            }
+            steps {
+                echo 'Building Java application with Maven...'
+                dir('sample-app') {
+                    sh '''
+                        mvn clean compile
+                        mvn test ${SKIP_TESTS ? '-DskipTests' : ''}
+                        mvn package -DskipTests=${SKIP_TESTS}
+                    '''
+                    
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                    
+                    script {
+                        if (!params.SKIP_TESTS) {
+                            publishTestResults testResultsPattern: 'target/surefire-reports/*.xml'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Prepare Ansible Control Node') {
+            steps {
+                echo 'Connecting to Ansible Control Node and preparing environment...'
+                
+                script {
+                    // Copy SSH keys to Ansible Control Node
+                    sshagent(credentials: ['ansible-control-ssh-key']) {
+                        sh """
+                            # Copy AWS SSH key to Ansible Control Node
+                            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                                \${AWS_SSH_KEY} \${ANSIBLE_USER}@\${ANSIBLE_HOST}:${ANSIBLE_WORKDIR}/keys/aws_rsa
+                                
+                            # Set proper permissions
+                            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                                \${ANSIBLE_USER}@\${ANSIBLE_HOST} \
+                                'chmod 600 ${ANSIBLE_WORKDIR}/keys/aws_rsa'
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Copy Ansible Configuration') {
+            steps {
+                echo 'Copying Ansible playbooks and configuration to Control Node...'
+                
+                sshagent(credentials: ['ansible-control-ssh-key']) {
+                    sh """
+                        # Create temporary directory on Control Node
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            \${ANSIBLE_USER}@\${ANSIBLE_HOST} \
+                            'sudo mkdir -p ${TEMP_DIR} && sudo chmod 777 ${TEMP_DIR}'
+                        
+                        # Copy Ansible files
+                        scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            ansible/* \${ANSIBLE_USER}@\${ANSIBLE_HOST}:${ANSIBLE_WORKDIR}/
+                            
+                        # Set proper ownership
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            \${ANSIBLE_USER}@\${ANSIBLE_HOST} \
+                            'sudo chown -R ansible:ansible ${ANSIBLE_WORKDIR}'
+                    """
+                }
+            }
+        }
+        
+        stage('Copy Application Artifact') {
+            when {
+                anyOf {
+                    params.DEPLOY_ENVIRONMENT == 'application'
+                    params.DEPLOY_ENVIRONMENT == 'full-deployment'
+                }
+            }
+            steps {
+                echo 'Copying application artifact to Ansible Control Node...'
+                
+                sshagent(credentials: ['ansible-control-ssh-key']) {
+                    sh """
+                        # Find the built JAR file
+                        JAR_FILE=\$(find sample-app/target -name "*.jar" -not -name "*-sources.jar" | head -1)
+                        
+                        if [ -n "\$JAR_FILE" ]; then
+                            echo "Copying \$JAR_FILE to Ansible Control Node"
+                            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                                "\$JAR_FILE" \${ANSIBLE_USER}@\${ANSIBLE_HOST}:${TEMP_DIR}/${APP_NAME}-${APP_VERSION}.jar
+                        else
+                            echo "No JAR file found!"
+                            exit 1
+                        fi
+                    """
+                }
+            }
+        }
+        
+        stage('Install Dependencies on Control Node') {
+            steps {
+                echo 'Installing Ansible, Python3, and Boto3 on Control Node...'
+                
+                sshagent(credentials: ['ansible-control-ssh-key']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            \${ANSIBLE_USER}@\${ANSIBLE_HOST} '
+                            # Update system
+                            sudo apt-get update
+                            
+                            # Install Python3 and pip if not already installed
+                            sudo apt-get install -y python3 python3-pip python3-venv
+                            
+                            # Install/upgrade Ansible
+                            pip3 install --upgrade ansible
+                            
+                            # Install/upgrade Boto3 for AWS
+                            pip3 install --upgrade boto3 botocore
+                            
+                            # Install additional packages
+                            pip3 install --upgrade requests paramiko
+                            
+                            # Verify installations
+                            ansible --version
+                            python3 -c "import boto3; print(\"Boto3 version:\", boto3.__version__)"
+                        '
+                    """
+                }
+            }
+        }
+        
+        stage('Execute Infrastructure Playbook') {
+            when {
+                anyOf {
+                    params.DEPLOY_ENVIRONMENT == 'infrastructure'
+                    params.DEPLOY_ENVIRONMENT == 'full-deployment'
+                }
+            }
+            steps {
+                echo 'Executing Ansible infrastructure playbook on Control Node...'
+                
+                script {
+                    def tagsOption = params.PLAYBOOK_TAGS ? "--tags ${params.PLAYBOOK_TAGS}" : ""
+                    
+                    sshagent(credentials: ['ansible-control-ssh-key']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                                \${ANSIBLE_USER}@\${ANSIBLE_HOST} '
+                                cd ${ANSIBLE_WORKDIR}
+                                
+                                # Run the main site playbook
+                                ansible-playbook playbooks/site.yml -i inventory/hosts ${tagsOption} -v
+                            '
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Execute Application Deployment') {
+            when {
+                anyOf {
+                    params.DEPLOY_ENVIRONMENT == 'application'
+                    params.DEPLOY_ENVIRONMENT == 'full-deployment'
+                }
+            }
+            steps {
+                echo 'Executing Ansible application deployment playbook...'
+                
+                sshagent(credentials: ['ansible-control-ssh-key']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            \${ANSIBLE_USER}@\${ANSIBLE_HOST} '
+                            cd ${ANSIBLE_WORKDIR}
+                            
+                            # Run the application deployment playbook
+                            ansible-playbook playbooks/deploy-app.yml -i inventory/hosts \
+                                -e "app_version=${APP_VERSION}" \
+                                -e "app_jar_name=${APP_NAME}-${APP_VERSION}.jar" -v
+                        '
+                    """
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                echo 'Verifying deployment on managed nodes...'
+                
+                sshagent(credentials: ['ansible-control-ssh-key']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            \${ANSIBLE_USER}@\${ANSIBLE_HOST} '
+                            cd ${ANSIBLE_WORKDIR}
+                            
+                            # Run verification tasks
+                            ansible-playbook playbooks/site.yml -i inventory/hosts --tags verify -v
+                            
+                            # Get service status
+                            ansible managed_nodes -i inventory/hosts -m service_facts
+                        '
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Cleaning up temporary files...'
+            
+            script {
+                try {
+                    sshagent(credentials: ['ansible-control-ssh-key']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                                \${ANSIBLE_USER}@\${ANSIBLE_HOST} '
+                                # Clean up temporary files
+                                sudo rm -rf ${TEMP_DIR}/*
+                            ' || true
+                        """
+                    }
+                } catch (Exception e) {
+                    echo "Cleanup failed: ${e.getMessage()}"
+                }
+            }
+        }
+        
+        success {
+            echo 'Deployment completed successfully!'
+            
+            script {
+                // Send notification or update status
+                currentBuild.description = "✅ Deployed ${APP_NAME} v${APP_VERSION} (${env.GIT_COMMIT_SHORT})"
+            }
+        }
+        
+        failure {
+            echo 'Deployment failed!'
+            
+            script {
+                currentBuild.description = "❌ Failed to deploy ${APP_NAME} v${APP_VERSION}"
+            }
+        }
+        
+        unstable {
+            echo 'Deployment completed with warnings!'
+        }
+    }
+}

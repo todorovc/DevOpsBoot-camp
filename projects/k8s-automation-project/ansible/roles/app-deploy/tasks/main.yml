@@ -1,0 +1,72 @@
+---
+# Main tasks for deploying the demo application
+
+- name: Create namespace
+  k8s:
+    name: "{{ app_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+    definition:
+      metadata:
+        labels:
+          name: "{{ app_namespace }}"
+          environment: "{{ environment | default('development') }}"
+          managed-by: ansible
+
+- name: Deploy application manifests
+  k8s:
+    state: present
+    definition: "{{ item }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
+  loop:
+    - "{{ deployment_manifest }}"
+    - "{{ service_manifest }}"
+  tags:
+    - deploy
+
+- name: Deploy ingress (if enabled)
+  k8s:
+    state: present
+    definition: "{{ ingress_manifest }}"
+    wait: true
+    wait_timeout: 180
+  when: enable_ingress | default(true) | bool
+  tags:
+    - deploy
+    - ingress
+
+- name: Verify deployment
+  k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ application_name }}"
+    namespace: "{{ app_namespace }}"
+  register: deployment_info
+  until: deployment_info.resources[0].status.readyReplicas == (application_replicas | int)
+  retries: 30
+  delay: 10
+  tags:
+    - verify
+
+- name: Get pods information
+  k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ app_namespace }}"
+    label_selectors:
+      - "app={{ application_name }}"
+  register: pods_info
+  tags:
+    - verify
+
+- name: Display pod status
+  debug:
+    msg: "Pod {{ item.metadata.name }} is {{ item.status.phase }}"
+  loop: "{{ pods_info.resources }}"
+  tags:
+    - verify

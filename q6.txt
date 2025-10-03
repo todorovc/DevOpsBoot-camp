@@ -1,0 +1,6 @@
+	kubectl get pods – your go-to to see if the application is running and what state the pods are in.
+	•	kubectl describe pod <name> – to dig deeper into why a pod is failing (events, errors, reasons).
+	•	kubectl logs <pod> – to check application logs without needing to ssh into the container.
+	•	kubectl get services – to verify exposure of your application and the assigned ClusterIP/LoadBalancer.
+	•	kubectl apply -f <file>.yaml – to deploy and update manifests declaratively.
+	•	kubectl delete -f <file>.yaml – to clean up after a deployment.

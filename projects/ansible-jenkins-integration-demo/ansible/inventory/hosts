@@ -1,0 +1,16 @@
+# Static inventory for AWS EC2 instances
+# Update IP addresses after terraform apply
+
+[webservers]
+web-server ansible_host=<WEB_SERVER_IP> ansible_user=ubuntu ansible_ssh_private_key_file=../keys/aws_rsa
+
+[appservers]
+app-server ansible_host=<APP_SERVER_IP> ansible_user=ubuntu ansible_ssh_private_key_file=../keys/aws_rsa
+
+[managed_nodes:children]
+webservers
+appservers
+
+[managed_nodes:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'

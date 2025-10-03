@@ -1,0 +1,119 @@
+# Website Monitoring System Configuration
+# This file contains all configuration settings for the monitoring system
+
+# Monitoring Settings
+monitoring:
+  timeout: 10                # HTTP request timeout in seconds
+  retry_count: 3             # Number of retries for failed requests
+  retry_delay: 5             # Delay between retries in seconds
+  check_interval: 300        # Default check interval in seconds (5 minutes)
+
+# Alert Thresholds
+alerts:
+  response_time_threshold: 5.0    # Response time threshold in seconds
+  send_on_recovery: true          # Send notifications when sites recover
+  send_on_degraded: true          # Send notifications for degraded performance
+  cooldown_minutes: 30            # Minimum time between duplicate alerts
+
+# Email Configuration
+# Note: Credentials should be set via environment variables
+email:
+  smtp_server: smtp.gmail.com
+  smtp_port: 587
+  use_tls: true
+  # The following will be loaded from environment variables:
+  # - EMAIL_USER (username)
+  # - EMAIL_PASSWORD (password or app-specific password)
+  # - FROM_EMAIL (sender email, defaults to EMAIL_USER)
+  # - TO_EMAILS (comma-separated recipient emails)
+  recipients: []  # Can also be set here as a list
+
+# Recovery Settings
+recovery:
+  enabled: true              # Enable automatic recovery actions
+  max_attempts: 3            # Maximum recovery attempts per failure
+  delay_seconds: 30          # Delay between recovery actions
+  actions:
+    # Recovery actions to attempt in order
+    - type: restart_nginx
+      description: "Restart Nginx web server"
+    
+    - type: restart_container
+      target: website-monitor
+      description: "Restart monitoring container"
+    
+    - type: reboot_server
+      description: "Reboot the entire server (last resort)"
+
+# Orchestration Settings
+orchestration:
+  check_interval: 300                    # Main monitoring loop interval
+  enable_recovery: true                  # Enable recovery actions
+  enable_notifications: true             # Enable email notifications
+  max_failures_before_recovery: 3        # Failures before triggering recovery
+  notification_cooldown: 1800            # Cooldown for notifications (30 minutes)
+  save_results: true                     # Save monitoring results to files
+  interval_minutes: 5                    # Alternative: human-readable interval
+
+# Linode Cloud Configuration
+linode:
+  # API token should be set via LINODE_API_TOKEN environment variable
+  region: us-east                        # Default region for new instances
+  type: g6-nanode-1                      # Default instance type (1GB RAM)
+  image: linode/ubuntu20.04              # Default OS image
+  private_ip: true                       # Enable private networking
+  tags:                                  # Tags for instances
+    - monitoring
+    - website-monitor
+    - production
+
+# Logging Configuration
+logging:
+  level: INFO                            # Log level (DEBUG, INFO, WARNING, ERROR)
+  file: logs/main.log                    # Main log file
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Component-specific log files
+  components:
+    monitor: logs/monitor.log
+    emailer: logs/emailer.log
+    recovery: logs/recovery.log
+    linode: logs/linode.log
+
+# File Paths
+websites_config: config/websites.yaml   # Path to websites configuration
+env_file: .env                          # Environment variables file
+
+# Performance Settings
+performance:
+  max_concurrent_checks: 10             # Maximum concurrent website checks
+  connection_pool_size: 20              # HTTP connection pool size
+  dns_cache_timeout: 300                # DNS cache timeout in seconds
+
+# Database Configuration (optional)
+# Uncomment and configure if you want to store monitoring data
+database:
+  enabled: false
+  # url: postgresql://user:password@localhost/monitoring
+  # connection_pool_size: 5
+  # timeout: 30
+
+# Dashboard Configuration (optional)
+dashboard:
+  enabled: false
+  port: 8080
+  host: 0.0.0.0
+  debug: false
+
+# Security Settings
+security:
+  ssl_verify: true                      # Verify SSL certificates
+  user_agent: "WebsiteMonitor/1.0"      # HTTP User-Agent string
+  max_redirects: 5                      # Maximum HTTP redirects to follow
+
+# Feature Flags
+features:
+  enable_ssl_monitoring: true           # Monitor SSL certificate validity
+  enable_port_monitoring: true          # Monitor specific ports
+  enable_content_verification: true     # Verify page content
+  enable_performance_metrics: true      # Collect response time metrics

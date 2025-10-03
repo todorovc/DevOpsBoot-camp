@@ -1,0 +1,21 @@
+# Terraform variables for Ansible-Jenkins integration demo
+# Copy this file to terraform.tfvars and update with your actual values
+
+# DigitalOcean Configuration
+do_token = "your-digitalocean-api-token-here"
+do_region = "nyc1"  # or any other DigitalOcean region
+
+# AWS Configuration
+aws_region = "us-east-1"
+aws_access_key = "your-aws-access-key-here"
+aws_secret_key = "your-aws-secret-key-here"
+
+# AWS AMI ID (Ubuntu 22.04 LTS)
+# Update this if using a different region
+aws_ami = "ami-0c02fb55956c7d316"  # Ubuntu 22.04 LTS in us-east-1
+
+# SSH Key Paths (relative to terraform directory)
+public_key_path = "../../keys/do_rsa.pub"
+aws_public_key_path = "../../keys/aws_rsa.pub"
+
+# Note: Make sure to generate SSH keys first using ./generate-keys.sh

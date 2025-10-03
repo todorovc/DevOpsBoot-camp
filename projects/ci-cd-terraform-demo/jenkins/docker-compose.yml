@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  jenkins:
+    build: .
+    container_name: jenkins-ci-cd
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./jenkins_casc.yaml:/var/jenkins_home/casc_configs/jenkins_casc.yaml:ro
+    environment:
+      - JENKINS_OPTS="--httpPort=8080"
+      - JAVA_OPTS="-Djenkins.install.runSetupWizard=false -Dcasc.jenkins.config=/var/jenkins_home/casc_configs/jenkins_casc.yaml"
+    networks:
+      - jenkins-network
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:
+    external: false
+
+networks:
+  jenkins-network:
+    driver: bridge

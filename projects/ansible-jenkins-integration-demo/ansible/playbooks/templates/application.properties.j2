@@ -1,0 +1,33 @@
+# Application Configuration
+app.name={{ app_name }}
+app.version={{ app_version }}
+server.port={{ app_port }}
+
+# Logging Configuration
+logging.level.root=INFO
+logging.level.com.example={{ app_name }}=DEBUG
+logging.file.name={{ log_dir }}/{{ app_name }}.log
+logging.file.max-size=10MB
+logging.file.max-history=30
+
+# Database Configuration (if used)
+{% if db_host is defined %}
+spring.datasource.url=jdbc:postgresql://{{ db_host }}:{{ db_port }}/{{ db_name }}
+spring.datasource.username={{ db_user }}
+spring.datasource.password={{ db_password }}
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=false
+{% endif %}
+
+# Application specific settings
+app.environment=production
+app.debug=false
+
+# Health check settings
+management.endpoints.web.exposure.include=health,info,metrics
+management.endpoint.health.show-details=when-authorized
+management.health.diskspace.enabled=true
+
+# Security settings
+server.error.include-message=never
+server.error.include-binding-errors=never
