@@ -1,0 +1,135 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  AWS_REGION: us-west-2
+  EKS_CLUSTER_NAME: eks-cicd-cluster
+  ECR_REPOSITORY: eks-cicd-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to EKS
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          APP_VERSION=${{ github.sha }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Deploy to EKS
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Replace placeholders in Kubernetes manifests
+        envsubst < k8s/deployment.yaml > k8s/deployment-applied.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f k8s/deployment-applied.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl apply -f k8s/hpa.yaml
+
+    - name: Verify deployment
+      run: |
+        kubectl rollout status deployment/eks-cicd-app --timeout=300s
+        kubectl get pods -l app=eks-cicd-app
+        kubectl get services eks-cicd-app-service
+
+    - name: Run post-deployment tests
+      run: |
+        # Wait for load balancer to be ready
+        echo "Waiting for load balancer to be ready..."
+        kubectl wait --for=condition=ready pod -l app=eks-cicd-app --timeout=300s
+        
+        # Get the load balancer URL
+        LB_URL=$(kubectl get service eks-cicd-app-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+        
+        if [ -n "$LB_URL" ]; then
+          echo "Load Balancer URL: http://$LB_URL"
+          
+          # Wait for the load balancer to be accessible
+          for i in {1..30}; do
+            if curl -f -s "http://$LB_URL/health" > /dev/null; then
+              echo "Application is accessible at http://$LB_URL"
+              break
+            else
+              echo "Waiting for load balancer to be accessible... ($i/30)"
+              sleep 10
+            fi
+          done
+        else
+          echo "Load balancer URL not yet available. Check AWS console for the actual URL."
+        fi
+
+    - name: Slack Notification
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
