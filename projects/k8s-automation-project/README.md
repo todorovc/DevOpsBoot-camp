@@ -145,7 +145,7 @@ docker build -t demo-k8s-app:latest .
 
 # Tag and push to your container registry (ECR, DockerHub, etc.)
 # Example for ECR:
-aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-west-2.amazonaws.com
+aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.eu-west-1.amazonaws.com
 docker tag demo-k8s-app:latest <account-id>.dkr.ecr.eu-west-1.amazonaws.com/demo-k8s-app:latest
 docker push <account-id>.dkr.ecr.eu-west-1.amazonaws.com/demo-k8s-app:latest
 ```
