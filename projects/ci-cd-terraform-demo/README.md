@@ -133,7 +133,7 @@ Before running the pipeline, update these files with your specific details:
 ```groovy
 environment {
     DOCKER_HUB_REPO = 'YOUR_DOCKERHUB_USERNAME/ci-cd-demo'
-    AWS_DEFAULT_REGION = 'us-west-2' // Change if needed
+    AWS_DEFAULT_REGION = 'eu-west-1 // Change if needed
 }
 ```
 
