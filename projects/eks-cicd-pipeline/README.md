@@ -54,7 +54,7 @@ Update `terraform/variables.tf` with your specific values:
 
 ```hcl
 variable "aws_region" {
-  default = "us-west-2"  # Change to your preferred region
+  default = "eu-west-1"  # Change to your preferred region
 }
 
 variable "github_repository" {
