@@ -44,7 +44,7 @@ aws configure
 # Or set environment variables
 export AWS_ACCESS_KEY_ID="your-access-key"
 export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_DEFAULT_REGION="us-west-2"
+export AWS_DEFAULT_REGION="eu-west-1"
 ```
 
 ### Python Dependencies
@@ -145,9 +145,9 @@ docker build -t demo-k8s-app:latest .
 
 # Tag and push to your container registry (ECR, DockerHub, etc.)
 # Example for ECR:
-aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-west-2.amazonaws.com
-docker tag demo-k8s-app:latest <account-id>.dkr.ecr.us-west-2.amazonaws.com/demo-k8s-app:latest
-docker push <account-id>.dkr.ecr.us-west-2.amazonaws.com/demo-k8s-app:latest
+aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-west-2.amazonaws.com
+docker tag demo-k8s-app:latest <account-id>.dkr.ecr.eu-west-1.amazonaws.com/demo-k8s-app:latest
+docker push <account-id>.dkr.ecr.eu-west-1.amazonaws.com/demo-k8s-app:latest
 ```
 
 ### Step 3: Deploy Application with Ansible
@@ -157,7 +157,7 @@ docker push <account-id>.dkr.ecr.us-west-2.amazonaws.com/demo-k8s-app:latest
 cd ../ansible
 
 # Update kubeconfig
-aws eks update-kubeconfig --region us-west-2 --name k8s-demo-dev
+aws eks update-kubeconfig --region eu-west-1 --name k8s-demo-dev
 
 # Deploy the application
 ansible-playbook playbooks/deploy-app.yml
@@ -174,7 +174,7 @@ ansible-playbook playbooks/deploy-app.yml -e cluster_name=your-cluster-name -e a
 terraform output
 
 # Check EKS cluster
-aws eks describe-cluster --name k8s-demo-dev --region us-west-2
+aws eks describe-cluster --name k8s-demo-dev --region eu-west-1
 ```
 
 ### Check Application
